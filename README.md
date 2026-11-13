@@ -2,6 +2,8 @@
 
 A poker roguelike for the browser. Play poker hands to beat a rising score target, and hire jokers that bend the scoring in your favour.
 
+**Play it now: <https://mxygem.github.io/foolhardy/>** — works on phones and desktops.
+
 - 8 antes, each with a Small, a Medium and a Boss blind. Bosses change the rules against you.
 - 300 jokers, each with its own behaviour, art and flavor text.
 - 12 hand types that can be levelled up.
@@ -10,7 +12,7 @@ A poker roguelike for the browser. Play poker hands to beat a rising score targe
 
 Plain JavaScript, HTML and CSS. There is no build step and nothing to install.
 
-## Run it
+## Run it locally
 
 Clone the repo:
 
@@ -44,7 +46,7 @@ Notes:
 4. After each blind, spend your winnings in the shop on jokers and consumables.
 5. Beat the Boss blind of ante 8 to win. You can then continue in endless mode.
 
-Jokers act from left to right, so order matters: put jokers that add Mult before jokers that multiply it. Drag them to reorder. Hover over any card or joker to see what it does.
+Jokers act from left to right, so order matters: put jokers that add Mult before jokers that multiply it. Drag them to reorder, or tap one and use Move left and Move right. Hover over or tap any card or joker to see what it does.
 
 Keys: `1` to `9` select cards, `Enter` plays, `Backspace` discards, `Esc` closes a dialog.
 

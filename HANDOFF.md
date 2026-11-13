@@ -4,7 +4,7 @@ A poker roguelike for the browser. Plain JavaScript, no build step, classic `<sc
 
 ## Status
 
-Everything in the original plan is built and passing. Run it by opening `index.html`, or `python3 -m http.server 8765` in this folder and visit `http://127.0.0.1:8765/`. Run the checks with `node test/check.js`.
+Everything in the original plan is built and passing. It is published with GitHub Pages from the `main` branch at https://mxygem.github.io/foolhardy/ and every push to `main` redeploys. Run it locally by opening `index.html`, or `python3 -m http.server 8765` in this folder and visit `http://127.0.0.1:8765/`. Run the checks with `node test/check.js`.
 
 - [x] `js/core.js` — rules engine
 - [x] `js/items.js` — 55 consumables (12 Decrees, 23 Charms, 20 Rites) and 26 bosses
@@ -17,7 +17,7 @@ Everything in the original plan is built and passing. Run it by opening `index.h
 ## Next steps, in priority order
 
 1. **Play it by hand and tune balance.** This is the biggest unknown. The test bot (greedy, buys at random) won 0 of 300 honest runs and usually dies in antes 1–3; it is a weak player, so that is not proof the game is too hard, but nobody has played a full run yet. Levers: `ANTE_BASE` and `FH.BLINDS` in `core.js`, `FH.HANDS` values, joker `cost`, starting money in `newGame`. A smarter bot in `test/check.js` (chase flushes/straights, value jokers) would give a real signal.
-2. **Check the things written but not exercised in a browser:** drag-to-reorder for jokers and hand cards, the keyboard shortcuts, the victory screen and endless mode, and the layout under 900px wide (CSS exists, never screenshotted).
+2. **Check the things written but not exercised in a browser:** drag-to-reorder for jokers and hand cards, the keyboard shortcuts, and the victory screen and endless mode. The phone layout (under 900px) was checked at 390×780 in emulation for blind select, play, cash-out and shop, but not on a real device.
 3. **Save and resume.** Nothing persists across a reload. State is plain data except `g.rng`, `joker.def`, `cons.def`, `g.boss` and `method_actor`'s `s.sub`; serialize ids and rebuild those.
 4. **Let card-targeting Charms and Rites be used in the shop.** They currently only work during a blind, on cards in hand. A "deal 8 random deck cards to choose from" picker would fix it.
 5. **Sound and more motion** (card deal, shatter, joker destroyed). Jokers removed mid-hand currently vanish before the replay starts because `play()` finishes before the UI animates.
