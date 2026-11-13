@@ -48,6 +48,8 @@ Notes:
 
 Jokers act from left to right, so order matters: put jokers that add Mult before jokers that multiply it. Drag them to reorder, or tap one and use Move left and Move right. Hover over or tap any card or joker to see what it does.
 
+To make everything bigger or smaller, use the − and + next to Size in the menu. The game picks a size to fit your window the first time, and remembers your choice after that.
+
 Keys: `1` to `9` select cards, `Enter` plays, `Backspace` discards, `Esc` closes a dialog.
 
 ## Run the checks

@@ -7,6 +7,20 @@ let g = null;
 const UI = { sel: new Set(), busy: false, playing: null, focus: null, speed: 1, shown: { score: 0, money: 0 }, tips: {}, tipN: 0, modal: null, filter: { r: 0, q: '' }, drag: null };
 window.FHUI = UI;
 
+const SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2, 2.25, 2.5];
+/* With no saved choice, size the interface to the window: it was designed at 1440 by 900. */
+const autoScale = () => (innerWidth <= 900 ? 1 : Math.max(1, Math.min(2.5, Math.round(Math.min(innerWidth / 1440, innerHeight / 900) * 20) / 20)));
+const curScale = () => UI.scale || autoScale();
+const applyScale = () => { document.documentElement.style.fontSize = 16 * curScale() + 'px'; };
+const sizer = () => `<div class="sizer"><button data-act="smaller" aria-label="Make everything smaller">−</button><span>Size ${Math.round(curScale() * 100)}%</span><button data-act="bigger" aria-label="Make everything bigger">+</button></div>`;
+function setScale(dir) {
+  const cur = curScale();
+  const next = dir > 0 ? SCALES.find(s => s > cur + 0.001) : [...SCALES].reverse().find(s => s < cur - 0.001);
+  if (!next) return toast(dir > 0 ? 'That is the largest size' : 'That is the smallest size');
+  UI.scale = next;
+  try { localStorage.setItem('fh-scale', next); } catch (e) { /* storage unavailable */ }
+  applyScale(); render();
+}
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const cash = n => (n < 0 ? '−$' + -n : '$' + n);
 const num = n => Math.round(n).toLocaleString('en-US');
@@ -64,7 +78,7 @@ function sideHTML() {
   <dl class="stats"><div><dt>Hands</dt><dd class="c-p">${inPlay ? g.handsLeft : FH.maxHands(g)}</dd></div><div><dt>Discards</dt><dd class="c-m">${inPlay ? g.discardsLeft : FH.maxDiscards(g)}</dd></div>
     <div class="wide"><dt>Money</dt><dd class="c-g" id="money">${cash(money)}</dd></div>
     <div><dt>Ante</dt><dd>${g.ante}${g.ante <= 8 ? '<small> / 8</small>' : ''}</dd></div><div><dt>Round</dt><dd>${g.roundNum}</dd></div></dl>
-  <nav class="menu"><button data-act="levels">Hand levels</button><button data-act="deck">Your deck</button><button data-act="collection">All 300 jokers</button><button data-act="speed">Speed ${UI.speed}×</button><button data-act="help">How to play</button><button data-act="new">New run</button></nav>`;
+  <nav class="menu"><button data-act="levels">Hand levels</button><button data-act="deck">Your deck</button><button data-act="collection">All 300 jokers</button><button data-act="speed">Speed ${UI.speed}×</button><button data-act="help">How to play</button><button data-act="new">New run</button>${sizer()}</nav>`;
 }
 function topHTML() {
   const js = g.jokers.map(s => {
@@ -140,7 +154,8 @@ function fitHand() {
   const h = $('#hand');
   if (!h || h.children.length < 2) return;
   const n = h.children.length, cw = h.children[0].offsetWidth, room = h.parentElement.clientWidth;
-  h.style.setProperty('--ov', (n * cw + (n - 1) * 8 > room ? Math.floor((room - n * cw) / (n - 1)) : 8) + 'px');
+  const gap = parseFloat(getComputedStyle(document.documentElement).fontSize) / 2;
+  h.style.setProperty('--ov', (n * cw + (n - 1) * gap > room ? Math.floor((room - n * cw) / (n - 1)) : gap) + 'px');
 }
 function refreshSelection() {
   document.querySelectorAll('#hand .pc').forEach(el => el.classList.toggle('sel', UI.sel.has(Number(el.dataset.uid))));
@@ -260,6 +275,7 @@ const ACTIONS = {
   endless: () => { g.endless = true; g.won = false; act(FH.enterShop(g)); },
   new: () => { if (g.phase !== 'over' && g.roundNum > 0 && !(g.won && !g.endless) && !confirm('Abandon this run and start a new one?')) return; closeModal(); newRun(); },
   speed: () => { UI.speed = UI.speed === 1 ? 2 : UI.speed === 2 ? 4 : 1; try { localStorage.setItem('fh-speed', UI.speed); } catch (e) { /* storage unavailable */ } render(); },
+  bigger: () => setScale(1), smaller: () => setScale(-1),
   levels: () => openModal('levels'), deck: () => openModal('deck'), collection: () => openModal('collection'), help: () => openModal('help'),
   close: () => closeModal(),
   rar: id => { UI.filter.r = Number(id); openModal('collection', true); },
@@ -267,7 +283,7 @@ const ACTIONS = {
 
 /* ---------- modals ---------- */
 const MODALS = {
-  menu: () => `<h2>Menu</h2><div class="menu-list"><button data-act="levels">Hand levels</button><button data-act="deck">Your deck</button><button data-act="collection">All 300 jokers</button><button data-act="speed">Speed ${UI.speed}×</button><button data-act="help">How to play</button><button data-act="new">New run</button></div>`,
+  menu: () => `<h2>Menu</h2><div class="menu-list"><button data-act="levels">Hand levels</button><button data-act="deck">Your deck</button><button data-act="collection">All 300 jokers</button><button data-act="speed">Speed ${UI.speed}×</button><button data-act="help">How to play</button><button data-act="new">New run</button>${sizer()}</div>`,
   levels: () => `<h2>Hand levels</h2><p class="muted">Decrees raise a hand type’s level. Each level adds to its starting Points and Mult.</p><table class="levels"><tr><th>Hand</th><th>Level</th><th>Starts at</th><th>Played</th></tr>${[...FH.HAND_IDS].reverse().filter(t => !FH.HANDS[t].secret || g.typeCounts[t] > 0).map(t => { const H = FH.HANDS[t], l = g.levels[t]; return `<tr><td>${H.name}</td><td>${l}</td><td><b class="t-p">${H.pts + H.lp * (l - 1)}</b> × <b class="t-m">${H.mult + H.lm * (l - 1)}</b></td><td>${g.typeCounts[t]}</td></tr>`; }).join('')}</table>`,
   deck: () => {
     const live = g.phase === 'play';
@@ -286,7 +302,7 @@ const MODALS = {
     <p>After every blind you visit the shop. <b>Jokers</b> sit above the table and change how hands score. Their order matters: they act from left to right, so put jokers that add Mult before jokers that multiply it. Drag them to reorder, or tap one and use Move left and Move right.</p>
     <p><b>Decrees</b> raise the level of a hand type. <b>Charms</b> change cards you have selected in your hand: enhancements, stamps, finishes, suit and rank. <b>Rites</b> reshape your deck by destroying, adding or converting cards. Click a consumable you own to use or sell it.</p>
     <p>You earn $1 of interest for every $5 you hold at the end of a round, up to $5, so saving pays.</p>
-    <p class="muted">Hover over or tap anything to see what it does. Keys: 1 to 9 select cards, Enter plays, Backspace discards.</p></div>`,
+    <p class="muted">Hover over or tap anything to see what it does. Use the − and + next to Size in the menu to make everything bigger or smaller. Keys: 1 to 9 select cards, Enter plays, Backspace discards.</p></div>`,
 };
 function openModal(name, keep) {
   UI.modal = name;
@@ -331,7 +347,7 @@ document.addEventListener('mouseover', e => { const el = e.target.closest('[data
 document.addEventListener('mouseout', e => { const el = e.target.closest('[data-tip]'); if (el && !el.contains(e.relatedTarget)) hideTip(); });
 document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el); });
 document.addEventListener('touchstart', e => { if (!e.target.closest('[data-tip]')) hideTip(); }, { passive: true });
-window.addEventListener('resize', () => fitHand());
+window.addEventListener('resize', () => { if (!UI.scale) applyScale(); fitHand(); });
 document.addEventListener('dragstart', e => {
   const el = e.target.closest('[data-drag]');
   if (!el || UI.busy) return e.preventDefault();
@@ -368,7 +384,8 @@ function newRun(seed) {
   render();
 }
 window.addEventListener('DOMContentLoaded', () => {
-  try { UI.speed = Number(localStorage.getItem('fh-speed')) || 1; } catch (e) { /* storage unavailable */ }
+  try { UI.speed = Number(localStorage.getItem('fh-speed')) || 1; UI.scale = Number(localStorage.getItem('fh-scale')) || 0; } catch (e) { /* storage unavailable */ }
+  applyScale();
   const seed = new URLSearchParams(location.search).get('seed');
   newRun(seed ? Number(seed) : undefined);
   let seen = false;
