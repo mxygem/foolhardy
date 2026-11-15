@@ -41,7 +41,7 @@ Notes:
 ## How to play
 
 1. Choose a blind. It sets a score you must reach.
-2. Select up to 5 cards from your hand and play them as a poker hand. The hand scores its Points multiplied by its Mult.
+2. Select up to 5 cards from your hand and play them as a poker hand. The hand scores its Points multiplied by its Mult. Click or tap cards to select them, or press on one and sweep across others to select several at once. The line above your hand shows what you have made, and dims any selected card that will not score.
 3. You have 4 hands and 3 discards per blind. Reach the target before you run out of hands.
 4. After each blind, spend your winnings in the shop on jokers and consumables.
 5. Beat the Boss blind of ante 8 to win. You can then continue in endless mode.
@@ -50,7 +50,9 @@ Jokers act from left to right, so order matters: put jokers that add Mult before
 
 To make everything bigger or smaller, use the − and + next to Size in the menu. The game picks a size to fit your window the first time, and remembers your choice after that.
 
-Keys: `1` to `9` select cards, `Enter` plays, `Backspace` discards, `Esc` closes a dialog.
+To rearrange your hand, hold a card for a moment (or drag it upward) and slide it into place. Right-click the hand, press `Esc` or use Clear to deselect everything.
+
+Keys: `1` to `9` select cards, `Enter` plays, `Backspace` discards, `Esc` clears your selection or closes a dialog.
 
 ## Run the checks
 

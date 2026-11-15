@@ -43,11 +43,11 @@ const cardTip = k => {
 };
 const cardHTML = (k, o = {}) => {
   const base = `data-uid="${k.uid}" data-tip="${tip(cardTip(k))}"${k.faceDown || k.enh || k.stamp || k.fin || k.debuffed || k.bp || k.bm ? ' data-rich="1"' : ''}`;
-  if (k.faceDown) return `<div class="pc down${UI.sel.has(k.uid) ? ' sel' : ''}" ${base}${o.hand ? ' data-act="card" data-id="' + k.uid + '" draggable="true" data-drag="card"' : ''}></div>`;
+  if (k.faceDown) return `<div class="pc down${UI.sel.has(k.uid) && o.hand ? ' sel' : ''}" ${base}></div>`;
   const su = FH.SUIT[k.suit], gr = k.enh === 'granite';
   const cls = ['pc', gr ? 'granite' : su.red ? 'red' : 'blk', k.enh ? 'enh-' + k.enh : '', k.fin ? 'fin-' + k.fin : '', k.debuffed ? 'debuffed' : '', UI.sel.has(k.uid) && o.hand ? 'sel' : '', o.dim ? 'dim' : '', o.small ? 'small' : ''].filter(Boolean).join(' ');
   const face = !gr && k.rank >= 11 && k.rank <= 13;
-  return `<div class="${cls}" ${base}${o.hand ? ` data-act="card" data-id="${k.uid}" draggable="true" data-drag="card"` : ''}>${gr ? '<span class="cc">◆</span>' : `<span class="ci"><b>${FH.rankLabel(k.rank)}</b><i>${su.sym}</i></span><span class="cc${face ? ' face' : ''}">${face ? FH.rankLabel(k.rank) : su.sym}</span><span class="ci br"><b>${FH.rankLabel(k.rank)}</b><i>${su.sym}</i></span>`}${k.enh ? `<span class="eb">${FH.ENH[k.enh].name}</span>` : ''}${k.stamp ? `<span class="st st-${k.stamp}"></span>` : ''}</div>`;
+  return `<div class="${cls}" ${base}>${gr ? '<span class="cc">◆</span>' : `<span class="ci"><b>${FH.rankLabel(k.rank)}</b><i>${su.sym}</i></span><span class="cc${face ? ' face' : ''}">${face ? FH.rankLabel(k.rank) : su.sym}</span><span class="ci br"><b>${FH.rankLabel(k.rank)}</b><i>${su.sym}</i></span>`}${k.enh ? `<span class="eb">${FH.ENH[k.enh].name}</span>` : ''}${k.stamp ? `<span class="st st-${k.stamp}"></span>` : ''}</div>`;
 };
 
 /* ---------- regions ---------- */
@@ -103,7 +103,7 @@ function stagePlay() {
   const boss = FH.bossOn(g) ? `<div class="bossbar"><span>${g.boss.emoji}</span><b>${esc(g.boss.name)}</b> ${fmt(g.boss.desc)}</div>` : g.blindIdx === 2 ? '<div class="bossbar quiet">The boss has no ability this time.</div>' : '';
   let mid;
   if (UI.playing) mid = `<div class="played">${UI.playing.map(k => cardHTML(k)).join('')}</div><div id="total" class="total"></div>`;
-  else mid = `<p class="hint">${g.lastHand ? `Last hand: ${FH.HANDS[g.lastHand.type].name} for <b>${num(g.lastHand.total)}</b>` : 'Pick up to 5 cards from your hand, then play them as a poker hand.'}</p>`;
+  else mid = `<p class="hint">${g.lastHand ? `Last hand: ${FH.HANDS[g.lastHand.type].name} for <b>${num(g.lastHand.total)}</b>` : `Score ${num(g.target)} to beat the ${g.blindIdx === 2 ? esc(g.boss.name) : FH.BLINDS[g.blindIdx].name}.`}</p>`;
   const peek = FH.flag(g, 'peek') && g.draw.length ? `<div class="peek"><span>Next from the deck</span>${g.draw.slice(-3).reverse().map(k => cardHTML(k, { small: true })).join('')}</div>` : '';
   return boss + mid + peek;
 }
@@ -134,7 +134,8 @@ function bottomHTML() {
   if (g.phase !== 'play') return '';
   const n = g.hand.filter(k => UI.sel.has(k.uid)).length;
   const canD = FH.canDiscard(g) && !UI.busy;
-  return `<div class="hand" id="hand">${g.hand.map(k => cardHTML(k, { hand: true })).join('')}</div>
+  return `<div class="hpv" id="hpv">${hpvHTML()}</div>
+  <div class="hand" id="hand">${g.hand.map(k => `<div class="hc" data-hc="${k.uid}">${cardHTML(k, { hand: true })}</div>`).join('')}</div>
   <div class="controls"><button class="btn go big" data-act="play"${n && !UI.busy ? '' : ' disabled'}>Play hand</button><button class="btn rose big" data-act="discard"${n && canD ? '' : ' disabled'}>Discard</button>
   <span class="sorts">Sort by <button class="link${g.sortMode === 'rank' ? ' on' : ''}" data-act="sort" data-id="rank">rank</button> <button class="link${g.sortMode === 'suit' ? ' on' : ''}" data-act="sort" data-id="suit">suit</button></span>
   <button class="deckpile" data-act="deck" title="See your deck"><b>${g.draw.length}</b><span>of ${g.deck.length} left</span></button></div>`;
@@ -148,7 +149,15 @@ function render() {
   const stage = $('#stage'); stage.className = 'stage ph-' + g.phase; stage.innerHTML = st;
   $('#bottom').innerHTML = bottomHTML();
   fitHand();
+  if ($('#hand')) refreshSelection();
   if (UI.modal) openModal(UI.modal, true);
+}
+/* The line just above the hand: what the selected cards make, or how to select. */
+function hpvHTML() {
+  const pv = preview();
+  if (!pv) return '<span class="muted">Select up to 5 cards. Press and sweep across cards to select several.</span>';
+  const n = g.hand.filter(k => UI.sel.has(k.uid)).length;
+  return `<b class="hpv-name">${esc(pv.name)}</b>${pv.lvl ? `<small>level ${pv.lvl}</small>` : ''}<span class="hpv-pm"><b class="t-p">${pv.p}</b> × <b class="t-m">${pv.m}</b></span><span class="hpv-n">${n} of 5</span><button class="link" data-act="clear">Clear</button>`;
 }
 function fitHand() {
   const h = $('#hand');
@@ -158,7 +167,14 @@ function fitHand() {
   h.style.setProperty('--ov', (n * cw + (n - 1) * gap > room ? Math.floor((room - n * cw) / (n - 1)) : gap) + 'px');
 }
 function refreshSelection() {
-  document.querySelectorAll('#hand .pc').forEach(el => el.classList.toggle('sel', UI.sel.has(Number(el.dataset.uid))));
+  const cards = g.hand.filter(k => UI.sel.has(k.uid));
+  const scoring = cards.length && !UI.busy && !cards.some(k => k.faceDown) ? new Set(FH.evaluate(g, cards).scoring.map(k => k.uid)) : null;
+  document.querySelectorAll('#hand .pc').forEach(el => {
+    const u = Number(el.dataset.uid), s = UI.sel.has(u);
+    el.classList.toggle('sel', s);
+    el.classList.toggle('ns', s && !!scoring && !scoring.has(u));
+  });
+  const hpv = $('#hpv'); if (hpv) hpv.innerHTML = hpvHTML();
   const pv = preview();
   $('#hname').innerHTML = pv ? `${esc(pv.name)}${pv.lvl ? ` <small>level ${pv.lvl}</small>` : ''}` : '<span class="muted">No hand selected</span>';
   $('#pts').textContent = pv ? pv.p : 0; $('#mult').textContent = pv ? pv.m : 0;
@@ -249,6 +265,22 @@ function doDiscard() {
   act(FH.discard(g, cards));
 }
 const find = (arr, id) => arr.find(x => x.uid === Number(id));
+/* Select or deselect one hand card. A sixth card shakes instead of being selected. Returns whether the selection changed. */
+function setCard(uid, want) {
+  if (want === UI.sel.has(uid)) return false;
+  if (want && g.hand.filter(k => UI.sel.has(k.uid)).length >= 5) {
+    const el = $(`#hand [data-uid="${uid}"]`);
+    if (el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); }
+    return false;
+  }
+  if (want) UI.sel.add(uid); else UI.sel.delete(uid);
+  return true;
+}
+function clearSelection() {
+  if (UI.busy || !UI.sel.size) return;
+  UI.sel.clear();
+  refreshSelection();
+}
 function moveJoker(id, d) {
   if (UI.busy) return;
   const i = g.jokers.findIndex(x => x.uid === Number(id)), j = i + d;
@@ -258,7 +290,8 @@ function moveJoker(id, d) {
 }
 const ACTIONS = {
   start: () => { UI.sel.clear(); UI.focus = null; act(FH.startBlind(g)); },
-  card: id => { if (UI.busy) return; id = Number(id); if (UI.sel.has(id)) UI.sel.delete(id); else if (UI.sel.size < 5) UI.sel.add(id); else return toast('You can select at most 5 cards'); refreshSelection(); },
+  card: id => { if (UI.busy || g.phase !== 'play') return; id = Number(id); setCard(id, !UI.sel.has(id)); refreshSelection(); },
+  clear: () => clearSelection(),
   play: doPlay, discard: doDiscard,
   sort: id => { g.sortMode = id; FH.sortHand(g); render(); },
   focus: id => { UI.focus = UI.focus === Number(id) ? null : Number(id); render(); const el = UI.focus && $(`#top [data-uid="${UI.focus}"]`); if (el) showTip(el); },
@@ -302,7 +335,8 @@ const MODALS = {
     <p>After every blind you visit the shop. <b>Jokers</b> sit above the table and change how hands score. Their order matters: they act from left to right, so put jokers that add Mult before jokers that multiply it. Drag them to reorder, or tap one and use Move left and Move right.</p>
     <p><b>Decrees</b> raise the level of a hand type. <b>Charms</b> change cards you have selected in your hand: enhancements, stamps, finishes, suit and rank. <b>Rites</b> reshape your deck by destroying, adding or converting cards. Click a consumable you own to use or sell it.</p>
     <p>You earn $1 of interest for every $5 you hold at the end of a round, up to $5, so saving pays.</p>
-    <p class="muted">Hover over or tap anything to see what it does. Use the − and + next to Size in the menu to make everything bigger or smaller. Keys: 1 to 9 select cards, Enter plays, Backspace discards.</p></div>`,
+    <p><b>Choosing cards:</b> click or tap a card to select it, or press on one and sweep across others to select several at once. To move a card in your hand, hold it for a moment (or drag it upward) and slide it into place. Right-click the hand, press Esc, or use Clear to deselect everything.</p>
+    <p class="muted">Hover over or tap anything to see what it does. Use the − and + next to Size in the menu to make everything bigger or smaller. Keys: 1 to 9 select cards, Enter plays, Backspace discards, Esc clears your selection.</p></div>`,
 };
 function openModal(name, keep) {
   UI.modal = name;
@@ -325,6 +359,7 @@ function showTip(el) {
   const html = UI.tips[el.dataset.tip];
   if (!html) return;
   if (TOUCH && el.closest('#hand') && !el.dataset.rich) return hideTip();
+  if (press && (press.swept || press.lifted)) return;
   const t = $('#tip'); t.innerHTML = html; t.classList.add('show');
   const r = el.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
   let x = r.left + r.width / 2 - w / 2, y = r.top - h - 10;
@@ -347,6 +382,89 @@ document.addEventListener('mouseover', e => { const el = e.target.closest('[data
 document.addEventListener('mouseout', e => { const el = e.target.closest('[data-tip]'); if (el && !el.contains(e.relatedTarget)) hideTip(); });
 document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el); });
 document.addEventListener('touchstart', e => { if (!e.target.closest('[data-tip]')) hideTip(); }, { passive: true });
+
+/* ---------- hand cards: press to select, sweep to select several, hold (or drag upward) to move ---------- */
+let press = null;
+const HOLD_MS = { mouse: 380, pen: 380, touch: 340 };
+const slotAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest('#hand .hc'); };
+document.addEventListener('pointerdown', e => {
+  const slot = e.target.closest && e.target.closest('#hand .hc');
+  if (!slot || e.button !== 0 || UI.busy || UI.modal || g.phase !== 'play' || press) return;
+  const uid = Number(slot.dataset.hc), want = !UI.sel.has(uid);
+  press = { id: e.pointerId, type: e.pointerType || 'mouse', uid, want, slot, x: e.clientX, y: e.clientY, touched: new Set([uid]), swept: false, lifted: false };
+  press.changed = setCard(uid, want);
+  press.timer = setTimeout(() => liftCard(), HOLD_MS[press.type] || 380);
+  refreshSelection();
+});
+document.addEventListener('pointermove', e => {
+  if (!press || e.pointerId !== press.id) return;
+  if (press.lifted) return dragTo(e.clientX, e.clientY);
+  const dx = e.clientX - press.x, dy = e.clientY - press.y;
+  if (Math.hypot(dx, dy) > (press.type === 'touch' ? 10 : 6)) clearTimeout(press.timer);
+  if (!press.swept && press.type !== 'touch' && -dy > 24 && Math.abs(dx) < -dy) return liftCard(e.clientX, e.clientY);
+  const s = slotAt(e.clientX, e.clientY);
+  if (!s) return;
+  const u = Number(s.dataset.hc);
+  if (press.touched.has(u)) return;
+  press.touched.add(u);
+  if (!press.swept) { press.swept = true; hideTip(); }
+  setCard(u, press.want);
+  refreshSelection();
+});
+function liftCard(x, y) {
+  const p = press;
+  if (!p || p.lifted || p.swept || !p.slot.isConnected) return;
+  clearTimeout(p.timer);
+  /* The player meant to move this card, not select it, so undo the press. */
+  if (p.changed) { if (p.want) UI.sel.delete(p.uid); else UI.sel.add(p.uid); refreshSelection(); }
+  hideTip();
+  p.slots = [...document.querySelectorAll('#hand .hc')];
+  p.from = p.to = p.slots.indexOf(p.slot);
+  p.lefts = p.slots.map(s => s.getBoundingClientRect().left);
+  p.step = p.slots.length > 1 ? p.lefts[1] - p.lefts[0] : 1;
+  p.lifted = true;
+  p.slot.classList.add('lifted');
+  $('#hand').classList.add('moving');
+  if (navigator.vibrate && p.type === 'touch') try { navigator.vibrate(12); } catch (err) { /* not allowed */ }
+  if (x != null) dragTo(x, y);
+}
+function dragTo(x, y) {
+  const p = press, dx = x - p.x, dy = Math.max(-80, Math.min(16, y - p.y));
+  p.slot.style.transform = `translate(${dx}px, ${dy}px)`;
+  const to = Math.max(0, Math.min(p.slots.length - 1, Math.round((p.lefts[p.from] + dx - p.lefts[0]) / p.step)));
+  if (to === p.to) return;
+  p.to = to;
+  p.slots.forEach((s, i) => {
+    if (i === p.from) return;
+    const shift = p.from < to && i > p.from && i <= to ? -p.step : p.from > to && i >= to && i < p.from ? p.step : 0;
+    s.style.transform = shift ? `translateX(${shift}px)` : '';
+  });
+}
+function endPress(e, cancelled) {
+  const p = press;
+  if (!p || (e && e.pointerId !== p.id)) return;
+  press = null;
+  clearTimeout(p.timer);
+  if (p.lifted) {
+    if (!cancelled && p.to !== p.from && g.hand[p.from] && g.hand[p.from].uid === p.uid) {
+      g.hand.splice(p.to, 0, g.hand.splice(p.from, 1)[0]);
+      g.sortMode = null;
+    }
+    render();
+    return;
+  }
+  /* A touch that turned into a page scroll should not leave the card selected. */
+  if (cancelled && !p.swept && p.changed) { if (p.want) UI.sel.delete(p.uid); else UI.sel.add(p.uid); refreshSelection(); }
+}
+document.addEventListener('pointerup', e => endPress(e, false));
+document.addEventListener('pointercancel', e => endPress(e, true));
+window.addEventListener('blur', () => endPress(null, true));
+/* Right-click on the hand clears the selection. A long touch also raises this event, so ignore it mid-press. */
+document.addEventListener('contextmenu', e => {
+  if (!e.target.closest('#bottom')) return;
+  e.preventDefault();
+  if (!press) clearSelection();
+});
 window.addEventListener('resize', () => { if (!UI.scale) applyScale(); fitHand(); });
 document.addEventListener('dragstart', e => {
   const el = e.target.closest('[data-drag]');
@@ -370,7 +488,7 @@ document.addEventListener('drop', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 'Escape') { if (UI.modal) closeModal(); else if (UI.focus) { UI.focus = null; render(); } return; }
+  if (e.key === 'Escape') { if (UI.modal) closeModal(); else if (UI.focus) { UI.focus = null; render(); } else clearSelection(); return; }
   if (UI.modal || g.phase !== 'play') return;
   if (e.key >= '1' && e.key <= '9') { const k = g.hand[Number(e.key) - 1]; if (k) ACTIONS.card(k.uid); }
   else if (e.key === 'Enter') { e.preventDefault(); doPlay(); }

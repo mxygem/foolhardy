@@ -125,9 +125,17 @@ p { margin: 0; }
 .pc.small .ci b { font-size: 1rem; } .pc.small .ci i { font-size: 0.8125rem; } .pc.small .ci { top: 0.125rem; left: 0.25rem; } .pc.small .cc, .pc.small .ci.br, .pc.small .eb { display: none; } .pc.small .st { width: 0.625rem; height: 0.625rem; right: 0.1875rem; top: auto; bottom: 0.25rem; border-width: 0.0625rem; }
 .pc.small[class*='enh-']::after, .pc.small.granite::after { content: ''; }
 .pc.dim { opacity: .32; }
-.hand .pc { cursor: pointer; }
-.hand .pc:hover { transform: translateY(-0.3125rem); }
-.hand .pc.sel { transform: translateY(-1.375rem); box-shadow: 0 0 0 0.1875rem var(--gold), 0 0.5rem 0 rgba(0, 0, 0, .35); }
+/* Each hand card sits in a slot that never moves, so the spot you pressed keeps working while the card itself lifts. */
+.hand .hc { position: relative; flex: 0 0 auto; cursor: pointer; touch-action: pan-y; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.hand .hc:hover .pc { transform: translateY(-0.3125rem); }
+.hand .hc .pc.sel { transform: translateY(-1.375rem); box-shadow: 0 0 0 0.1875rem var(--gold), 0 0.5rem 0 rgba(0, 0, 0, .35); }
+.hand .hc .pc.sel.ns { filter: saturate(.3) brightness(.78); box-shadow: 0 0 0 0.1875rem var(--muted), 0 0.5rem 0 rgba(0, 0, 0, .35); }
+.hand.moving .hc { transition: transform .15s ease; }
+.hand.moving .hc:hover .pc { transform: none; }
+.hand .hc.lifted { z-index: 10; transition: none; cursor: grabbing; }
+.hand .hc.lifted .pc { transform: translateY(-0.75rem) scale(1.06); box-shadow: 0 0 0 0.1875rem var(--pts), 0 0.9rem 1.25rem rgba(0, 0, 0, .45); }
+.pc.nope { animation: nope .32s ease; }
+@keyframes nope { 0%, 100% { translate: 0 0; } 20% { translate: -0.35rem 0; } 40% { translate: 0.35rem 0; } 60% { translate: -0.25rem 0; } 80% { translate: 0.2rem 0; } }
 .bump { animation: bump .25s ease-out; }
 @keyframes bump { 0% { transform: translateY(-0.625rem) scale(1.07); } 100% { transform: none; } }
 .hand .pc.bump { animation: none; }
@@ -170,7 +178,11 @@ p { margin: 0; }
 /* ----- hand and controls ----- */
 #bottom { display: flex; flex-direction: column; align-items: center; gap: 0.875rem; min-height: 2.5rem; min-width: 0; }
 .hand { display: flex; justify-content: center; padding-top: 1.625rem; flex-wrap: nowrap; max-width: 100%; }
-.hand .pc + .pc { margin-left: var(--ov, 0.5rem); }
+.hand .hc + .hc { margin-left: var(--ov, 0.5rem); }
+.hpv { display: flex; align-items: baseline; justify-content: center; gap: 0.625rem; min-height: 1.875rem; margin-bottom: -0.875rem; max-width: 100%; white-space: nowrap; overflow: hidden; font-size: 1.05rem; }
+.hpv .muted { overflow: hidden; text-overflow: ellipsis; }
+.hpv-name { font-size: 1.25rem; } .hpv small { color: var(--muted); font-size: 0.95rem; }
+.hpv-pm { font-weight: 800; font-size: 1.2rem; font-variant-numeric: tabular-nums; } .hpv-n { color: var(--muted); }
 .controls { display: flex; align-items: center; gap: 0.875rem; flex-wrap: wrap; justify-content: center; }
 .sorts { color: var(--muted); }
 .link { background: none; border: none; padding: 0 0.125rem; text-decoration: underline; color: var(--text); } .link.on { color: var(--gold); font-weight: 700; }
@@ -240,7 +252,8 @@ p { margin: 0; }
   .ci b { font-size: 1.125rem; } .ci i { font-size: 0.875rem; } .ci { top: 0.1875rem; left: 0.25rem; } .ci.br { bottom: 0.1875rem; right: 0.25rem; } .cc { font-size: 1.875rem; } .cc.face { font-size: 2rem; } .cc.face::before { inset: 1.25rem 0.875rem; }
   .eb { font-size: 0.625rem; padding: 0 0.3125rem; } .st { width: 0.8125rem; height: 0.8125rem; right: 0.25rem; top: 0.375rem; }
   .hand { padding-top: 1.5rem; }
-  .hand .pc:hover { transform: none; } .hand .pc.sel, .hand .pc.sel:hover { transform: translateY(-1.25rem); }
+  .hand .hc:hover .pc { transform: none; } .hand .hc .pc.sel { transform: translateY(-1.25rem); } .hand .hc.lifted .pc { transform: translateY(-0.75rem) scale(1.06); }
+  .hpv { font-size: 0.9rem; gap: 0.45rem; min-height: 1.5rem; } .hpv-name { font-size: 1.05rem; } .hpv-pm { font-size: 1rem; } .hpv small { font-size: 0.8rem; }
   .controls { gap: 0.5rem; } .btn.big { font-size: 1.0625rem; padding: 0.625rem 0.8125rem; white-space: nowrap; }
   .sorts { font-size: 0.875rem; white-space: nowrap; } .deckpile { padding: 0.375rem 0.5625rem; } .deckpile span { display: none; } .deckpile b { font-size: 1.125rem; }
   .blinds .btn.big, .panel .btn.big, .shop .btn.big { white-space: normal; }
