@@ -50,6 +50,8 @@ Jokers act from left to right, so order matters: put jokers that add Mult before
 
 To make everything bigger or smaller, use the − and + next to Size in the menu. The game picks a size to fit your window the first time, and remembers your choice after that.
 
+Once cards are selected, each joker shows a badge with what it adds to that hand, and the line above your hand shows what the hand would score. Hover over or tap a joker or card for the details, including what the hand would score without that joker. Luck-based effects show a range.
+
 To rearrange your hand, hold a card for a moment (or drag it upward) and slide it into place. Right-click the hand, press `Esc` or use Clear to deselect everything.
 
 Keys: `1` to `9` select cards, `Enter` plays, `Backspace` discards, `Esc` clears your selection or closes a dialog.

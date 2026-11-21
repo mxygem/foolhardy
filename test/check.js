@@ -4,6 +4,9 @@ const path = require('path');
 for (const f of ['core', 'items', 'jokers-a', 'jokers-b', 'jokers-c', 'jokers-d']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const FH = globalThis.FH;
 let failed = 0;
+/* Preview checks, filled in by the bot: a preview must never change the real game, and must predict the real score when luck plays no part. */
+const PV = { sims: 0, exact: 0, mismatch: [], mutated: [] };
+const snap = g => JSON.stringify(g, (k, v) => (typeof v === 'function' ? undefined : v));
 const fail = msg => { failed++; console.log('FAIL  ' + msg); };
 const ok = msg => console.log('ok    ' + msg);
 
@@ -94,7 +97,16 @@ const playRound = (g, smart) => {
     }
     let cards = b.cards;
     if (FH.bossOn(g) && g.boss.validate && g.boss.validate(g, cards)) cards = g.hand.slice(0, 5);
+    if (!(FH.bossOn(g) && g.boss.validate && g.boss.validate(g, cards))) {
+      const before = snap(g), u = cards.map(k => k.uid);
+      const sims = [0, 0.999999].map(l => FH.simulate(g, u, l));
+      const wo = g.jokers.length ? FH.simulate(g, u, 0, g.jokers[0].uid) : null;
+      PV.sims += 2 + (wo ? 1 : 0);
+      if (snap(g) !== before) PV.mutated.push(g.jokers.map(s => s.def.name).join(', '));
+      if (sims[0].total === sims[1].total) PV.pending = { total: sims[0].total, jokers: g.jokers.map(s => s.def.name).join(', ') + ' / ' + (FH.bossOn(g) ? g.boss.name : 'no boss') };
+    }
     const r = FH.play(g, cards);
+    if (PV.pending) { if (!r.error) { if (r.total === PV.pending.total) PV.exact++; else PV.mismatch.push(`predicted ${PV.pending.total}, got ${r.total} [${PV.pending.jokers}]`); } PV.pending = null; }
     if (r.error) { if (g.hand.length < 5) { g.phase = 'over'; break; } throw new Error(r.error); }
     if (!Number.isFinite(r.total)) throw new Error('hand total is not a number');
     FH.resolvePlay(g); check(g, 'play');
@@ -166,5 +178,7 @@ const shopVisit = (g, buyJokers) => {
   }
   console.log(`      simple bot over ${N} honest runs: ${wins} wins; runs ending on each ante: ${Object.keys(reach).sort((a, b) => a - b).map(a => `${a > 8 ? 'won' : 'ante ' + a}: ${reach[a]}`).join(', ')}`);
 }
+PV.mutated.length ? fail(`previews changed the real game ${PV.mutated.length} times, e.g. with ${PV.mutated[0]}`) : ok(`${PV.sims} preview simulations left the real game untouched`);
+PV.mismatch.length ? fail(`${PV.mismatch.length} of ${PV.exact + PV.mismatch.length} luck-free previews missed the real score, e.g. ${PV.mismatch.slice(0, 3).join('; ')}`) : ok(`all ${PV.exact} luck-free previews matched the real score exactly`);
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
 process.exit(failed ? 1 : 0);

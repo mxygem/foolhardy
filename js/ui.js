@@ -34,7 +34,9 @@ const tip = html => { const k = 't' + UI.tipN++; UI.tips[k] = html; return k; };
 const jokerTip = (def, s, extra) => `<div class="tp-head"><strong>${esc(def.name)}</strong><span class="rar r${def.rarity}">${FH.RARITY[def.rarity]}</span></div><p>${fmt(FH.descOf(def, s))}</p>${s && s.fin ? `<p class="tp-mod">${FH.FIN[s.fin].name}: ${fmt(FH.FIN[s.fin].desc)}</p>` : ''}${s && s.disabled ? '<p class="tp-warn">Silenced by the boss this hand</p>' : ''}<p class="tp-flavor">${esc(def.flavor)}</p>${extra || ''}`;
 const jokerCard = (def, s, o = {}) => `<div class="jk r${def.rarity}${s && s.fin ? ' fin-' + s.fin : ''}${s && s.disabled ? ' off' : ''}${o.cls ? ' ' + o.cls : ''}"${s ? ` data-uid="${s.uid}"` : ''} data-tip="${tip(jokerTip(def, s, o.extra))}"${o.drag ? ' draggable="true" data-drag="joker"' : ''}${o.click ? ` data-act="${o.click}" data-id="${s.uid}"` : ''}><div class="jk-art">${FH.art(def)}</div><div class="jk-name">${esc(def.name)}</div></div>`;
 const KIND_NAME = { decree: 'Decree', charm: 'Charm', rite: 'Rite' };
-const consTip = (def, extra) => `<div class="tp-head"><strong>${esc(def.name)}</strong><span class="rar k-${def.kind}">${KIND_NAME[def.kind]}</span></div><p>${fmt(def.desc)}</p>${def.hand ? `<p class="tp-mod">Now level ${g.levels[def.hand]}</p>` : ''}<p class="tp-flavor">${esc(def.flavor)}</p>${extra || ''}`;
+const handAt = (t, l) => { const H = FH.HANDS[t]; return `<b class="t-p">${H.pts + H.lp * (l - 1)}</b> × <b class="t-m">${H.mult + H.lm * (l - 1)}</b>`; };
+const decreeLine = t => `<p class="tp-live">${FH.HANDS[t].name} is level ${g.levels[t]} now: ${handAt(t, g.levels[t])}. This makes it level ${g.levels[t] + 1}: ${handAt(t, g.levels[t] + 1)}.</p>`;
+const consTip = (def, extra) => `<div class="tp-head"><strong>${esc(def.name)}</strong><span class="rar k-${def.kind}">${KIND_NAME[def.kind]}</span></div><p>${fmt(def.desc)}</p>${def.hand ? decreeLine(def.hand) : ''}<p class="tp-flavor">${esc(def.flavor)}</p>${extra || ''}`;
 const consCard = (def, inst, o = {}) => `<div class="cn k-${def.kind}${o.cls ? ' ' + o.cls : ''}"${inst ? ` data-uid="${inst.uid}"` : ''} data-tip="${tip(consTip(def, o.extra))}"${o.click ? ` data-act="${o.click}" data-id="${inst.uid}"` : ''}><div class="cn-art">${FH.consArt(def)}</div><div class="cn-name">${esc(def.name)}</div></div>`;
 const cardTip = k => {
   if (k.faceDown) return '<div class="tp-head"><strong>Face-down card</strong></div><p>You will find out what it is when you play or discard it.</p>';
@@ -152,12 +154,141 @@ function render() {
   if ($('#hand')) refreshSelection();
   if (UI.modal) openModal(UI.modal, true);
 }
-/* The line just above the hand: what the selected cards make, or how to select. */
+/* The line just above the hand: what the selected cards make, what they would score, or how to select. */
 function hpvHTML() {
   const pv = preview();
   if (!pv) return '<span class="muted">Select up to 5 cards. Press and sweep across cards to select several.</span>';
-  const n = g.hand.filter(k => UI.sel.has(k.uid)).length;
-  return `<b class="hpv-name">${esc(pv.name)}</b>${pv.lvl ? `<small>level ${pv.lvl}</small>` : ''}<span class="hpv-pm"><b class="t-p">${pv.p}</b> × <b class="t-m">${pv.m}</b></span><span class="hpv-n">${n} of 5</span><button class="link" data-act="clear">Clear</button>`;
+  const n = g.hand.filter(k => UI.sel.has(k.uid)).length, fc = UI.fc;
+  let sc = '';
+  if (fc && fc.error) sc = `<span class="hpv-err">${esc(fc.error)}</span>`;
+  else if (fc && fc.totals) {
+    const lo = Math.min(...fc.totals), hi = Math.max(...fc.totals);
+    sc = `<span class="hpv-sc${g.score + lo >= g.target ? ' win' : ''}" title="${g.score + lo >= g.target ? 'This hand beats the blind' : ''}">scores <b>${lo === hi ? num(lo) : `${num(lo)} to ${num(hi)}`}</b></span>`;
+  }
+  return `<b class="hpv-name">${esc(pv.name)}</b>${pv.lvl ? `<small>level ${pv.lvl}</small>` : ''}<span class="hpv-pm"><b class="t-p">${pv.p}</b> × <b class="t-m">${pv.m}</b></span>${sc}<span class="hpv-n">${n} of 5</span><button class="link" data-act="clear">Clear</button>`;
+}
+
+/* ---------- live contributions ----------
+   The selected hand is scored on a copy of the game twice: once with every chance succeeding and once with every chance
+   failing, so luck-based effects show as a range. Every Points, Mult, ×Mult and $ effect is credited to the joker or card
+   that caused it, and each joker's worth is also measured by scoring the hand again without it. */
+const LUCK = [0, 0.999999];
+const blankFx = () => ({ p: 0, m: 0, x: 1, $: 0, rc: 0, rj: 0, set: null });
+function forecast() {
+  if (g.phase !== 'play' || UI.busy || g.pending) return null;
+  const chosen = g.hand.filter(k => UI.sel.has(k.uid));
+  if (!chosen.length) return { none: true };
+  if (chosen.some(k => k.faceDown)) return { hidden: true };
+  const uids = chosen.map(k => k.uid);
+  try {
+    const runs = LUCK.map(l => FH.simulate(g, uids, l));
+    if (runs[0].error) return { error: runs[0].error };
+    const per = new Map();
+    runs.forEach((r, i) => r.ev.forEach(e => {
+      if (!e.src) return;
+      if (!per.has(e.src)) per.set(e.src, [blankFx(), blankFx()]);
+      const b = per.get(e.src)[i];
+      if (e.kind === 'pts') b.p += e.val;
+      else if (e.kind === 'mult') b.m += e.val;
+      else if (e.kind === 'x') b.x *= e.val;
+      else if (e.kind === 'money') b.$ += e.val;
+      else if (e.kind === 're') { if (e.joker) b.rj += e.val; else b.rc += e.val; }
+      else if (e.set) b.set = e.set.to;
+    }));
+    const without = new Map(g.jokers.map(s => [s.uid, LUCK.map(l => FH.simulate(g, uids, l, s.uid).total)]));
+    return { per, totals: runs.map(r => r.total), without, scoring: new Set(runs[0].ev.find(e => e.kind === 'start').scoring) };
+  } catch (err) {
+    console.warn('Preview failed', err);
+    return null;
+  }
+}
+const r2 = n => Math.round(n * 100) / 100;
+/* Each effect as [long text, short badge text, colour class], with a range when luck changes it. */
+function fxParts(a) {
+  const out = [], [A, B] = a;
+  /* t: kind of effect; n: how one value reads; unit: added once after a value or range; brief: badge text for one value */
+  const rng = (t, u, v, n, unit, brief, cls, idle) => {
+    if (u === idle && v === idle) return;
+    const lo = Math.min(u, v), hi = Math.max(u, v), un = typeof unit === 'function' ? unit(hi) : unit;
+    out.push({ t, lo, hi, cls, long: lo === hi ? n(lo) + un : `${n(lo)} to ${n(hi)}${un}`, brief: lo === hi ? brief(lo) : `${brief(lo)}–${brief(hi).replace(/^[+×$−]+/, '')}` });
+  };
+  const signed = x => (x < 0 ? '−' : '+') + short(Math.abs(x));
+  rng('add', A.p, B.p, signed, ' Points', signed, 't-p', 0);
+  rng('add', A.m, B.m, signed, ' Mult', signed, 't-m', 0);
+  rng('x', r2(A.x), r2(B.x), x => '×' + x, ' Mult', x => '×' + x, 't-x', 1);
+  rng('money', A.$, B.$, x => (x < 0 ? '−$' : '+$') + Math.abs(x), '', x => (x < 0 ? '−$' : '$') + Math.abs(x), 't-g', 0);
+  rng('re', A.rc, B.rc, x => String(x), x => ` extra card trigger${x === 1 ? '' : 's'}`, x => '↻' + x, 't-re', 0);
+  rng('nb', A.rj, B.rj, x => String(x), x => ` neighbour${x === 1 ? '' : 's'}`, x => '↻' + x, 't-re', 0);
+  const sets = [A.set, B.set].filter(Boolean).sort((x, y) => x[0] * x[1] - y[0] * y[1]);
+  if (sets.length) {
+    const [s0, s1] = [sets[0], sets[sets.length - 1]], same = s0[0] === s1[0] && s0[1] === s1[1], one = s => `${short(s[0])} × ${short(s[1])}`;
+    out.push({ t: 'set', cls: 't-re', long: same ? one(s0) : `${one(s0)} to ${one(s1)}`, brief: same ? `=${compact(s0[0])}×${compact(s0[1])}` : `=${compact(s0[0])}–${compact(s1[0])}` });
+  }
+  return out;
+}
+const rangeText = arr => { const lo = Math.min(...arr), hi = Math.max(...arr); return lo === hi ? num(lo) : `${num(lo)} to ${num(hi)}`; };
+const compact = n => { const a = Math.abs(n); return (a >= 1e6 ? r2(a / 1e6) + 'M' : a >= 1e4 ? Math.round(a / 1e3) + 'k' : a >= 1e3 ? Math.round(a / 100) / 10 + 'k' : String(Math.round(a))); };
+const hl = p => `<b class="${p.cls}">${p.long}</b>`;
+const andList = xs => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+/* Turn a joker's effects into plain sentences. */
+function fxSentences(parts) {
+  const s = [], of = t => parts.filter(p => p.t === t);
+  if (of('add').length) s.push(`Adds ${andList(of('add').map(hl))}`);
+  of('x').forEach(p => s.push(`Multiplies Mult by <b class="t-x">${p.lo === p.hi ? '×' + p.lo : `×${p.lo} to ×${p.hi}`}</b>`));
+  of('money').forEach(p => { const amt = (x, y) => (x === y ? '$' + Math.abs(x) : `$${Math.abs(x)} to $${Math.abs(y)}`); s.push(p.hi <= 0 ? `Costs <b class="t-g">${amt(p.hi, p.lo)}</b>` : p.lo >= 0 ? `Earns <b class="t-g">${amt(p.lo, p.hi)}</b>` : `Changes your money by <b class="t-g">${p.long}</b>`); });
+  of('re').forEach(p => s.push(`Gives <b class="t-re">${p.long}</b>`));
+  of('nb').forEach(p => s.push(`Makes <b class="t-re">${p.long}</b> trigger again`));
+  of('set').forEach(p => s.push(`Sets Points and Mult to <b class="t-re">${p.long}</b>`));
+  return s.map(x => x + '.').join(' ');
+}
+function jokerLive(uid) {
+  const fc = UI.fc;
+  if (!fc || fc.none) return '<p class="tp-live muted">Select cards to see what this adds to that hand.</p>';
+  if (fc.hidden || fc.error || !fc.per) return '';
+  const parts = fc.per.has(uid) ? fxParts(fc.per.get(uid)) : [];
+  const wo = fc.without.get(uid) || fc.totals;
+  const changed = wo.some((w, i) => w !== fc.totals[i]);
+  const sent = fxSentences(parts);
+  const what = parts.length ? 'In this hand it ' + sent.charAt(0).toLowerCase() + sent.slice(1) : 'Adds nothing directly to this hand.';
+  const worth = changed ? ` The hand scores <b>${rangeText(fc.totals)}</b> with it and <b>${rangeText(wo)}</b> without it.` : parts.length ? '' : ' Removing it would not change the score.';
+  return `<p class="tp-live">${what}${worth}</p>`;
+}
+function jokerBadge(uid) {
+  const fc = UI.fc;
+  if (!fc || !fc.per) return '';
+  const parts = fc.per.has(uid) ? fxParts(fc.per.get(uid)) : [];
+  if (parts.length) return parts.slice(0, 3).map(p => `<b class="${p.cls}">${p.brief}</b>`).join('');
+  const wo = fc.without.get(uid);
+  if (!wo) return '';
+  const d = fc.totals.map((t, i) => t - wo[i]), lo = Math.min(...d), hi = Math.max(...d);
+  if (!lo && !hi) return '';
+  const sg = x => (x < 0 ? '−' : '+') + compact(x);
+  return `<b class="t-sc" title="Change to the hand's score">${lo === hi ? sg(lo) + ' score' : `${sg(lo)}–${compact(hi)}`}</b>`;
+}
+function cardLive(uid) {
+  const fc = UI.fc;
+  if (!fc || !fc.per) return '';
+  const parts = fc.per.has(uid) ? fxParts(fc.per.get(uid)) : [];
+  const selected = UI.sel.has(uid);
+  if (selected && !fc.scoring.has(uid) && !parts.length) return '<p class="tp-live">Won’t score in this hand.</p>';
+  if (!parts.length) return '';
+  return `<p class="tp-live">${selected ? 'In this hand' : 'Held in your hand'}: ${andList(parts.map(hl))}.</p>`;
+}
+function liveTip(el) {
+  if (g.phase !== 'play' || UI.busy || !el.dataset.uid) return '';
+  const uid = Number(el.dataset.uid);
+  if (el.closest('#jokers') && g.jokers.some(s => s.uid === uid)) return jokerLive(uid);
+  if (el.closest('#hand')) return cardLive(uid);
+  return '';
+}
+function paintBadges() {
+  document.querySelectorAll('#jokers .jk').forEach(el => {
+    const html = jokerBadge(Number(el.dataset.uid));
+    let b = el.querySelector('.jfc');
+    if (!html) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.className = 'jfc'; el.querySelector('.jk-art').appendChild(b); }
+    b.innerHTML = html;
+  });
 }
 function fitHand() {
   const h = $('#hand');
@@ -167,8 +298,11 @@ function fitHand() {
   h.style.setProperty('--ov', (n * cw + (n - 1) * gap > room ? Math.floor((room - n * cw) / (n - 1)) : gap) + 'px');
 }
 function refreshSelection() {
+  UI.fc = forecast();
   const cards = g.hand.filter(k => UI.sel.has(k.uid));
-  const scoring = cards.length && !UI.busy && !cards.some(k => k.faceDown) ? new Set(FH.evaluate(g, cards).scoring.map(k => k.uid)) : null;
+  const scoring = UI.fc && UI.fc.scoring ? UI.fc.scoring : cards.length && !UI.busy && !cards.some(k => k.faceDown) ? new Set(FH.evaluate(g, cards).scoring.map(k => k.uid)) : null;
+  paintBadges();
+  if (UI.tipEl && UI.tipEl.isConnected && $('#tip').classList.contains('show')) showTip(UI.tipEl);
   document.querySelectorAll('#hand .pc').forEach(el => {
     const u = Number(el.dataset.uid), s = UI.sel.has(u);
     el.classList.toggle('sel', s);
@@ -204,7 +338,7 @@ function toast(text) {
 const setTick = (sel, text) => { const el = $(sel); if (!el || el.textContent === text) return; el.textContent = text; el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick'); };
 const evText = e => (e.kind === 'pts' ? [(e.val > 0 ? '+' : '') + short(e.val), 'p-pts'] : e.kind === 'mult' ? [(e.val > 0 ? '+' : '') + short(e.val) + ' Mult', 'p-mult'] : e.kind === 'x' ? ['×' + short(e.val), 'p-x'] : e.kind === 'money' ? [(e.val > 0 ? '+' : '−') + '$' + Math.abs(e.val), 'p-gold'] : [String(e.val), 'p-msg']);
 async function replay(evs) {
-  const beats = evs.filter(e => e.src).length;
+  const beats = evs.filter(e => e.src && e.kind !== 're').length;
   const beat = Math.max(55, Math.min(300, 4800 / Math.max(1, beats))) / UI.speed;
   for (const e of evs) {
     if (e.kind === 'start') {
@@ -223,6 +357,7 @@ async function replay(evs) {
       await sleep(520 / UI.speed); continue;
     }
     if (e.kind === 'sync') { UI.shown.money = e.money; setTick('#money', cash(e.money)); continue; }
+    if (e.kind === 're') continue;
     const [text, cls] = evText(e);
     const el = e.src ? $(`[data-uid="${e.src}"]`) : null;
     if (el) pop(el, text, cls); else if (e.kind === 'msg') toast(text);
@@ -336,6 +471,7 @@ const MODALS = {
     <p><b>Decrees</b> raise the level of a hand type. <b>Charms</b> change cards you have selected in your hand: enhancements, stamps, finishes, suit and rank. <b>Rites</b> reshape your deck by destroying, adding or converting cards. Click a consumable you own to use or sell it.</p>
     <p>You earn $1 of interest for every $5 you hold at the end of a round, up to $5, so saving pays.</p>
     <p><b>Choosing cards:</b> click or tap a card to select it, or press on one and sweep across others to select several at once. To move a card in your hand, hold it for a moment (or drag it upward) and slide it into place. Right-click the hand, press Esc, or use Clear to deselect everything.</p>
+    <p><b>Previews:</b> once you select cards, each joker shows what it adds to that hand, and the line above your hand shows what it would score. Hover over or tap a joker or card for the details, including what the hand would score without that joker. Effects that depend on luck show a range.</p>
     <p class="muted">Hover over or tap anything to see what it does. Use the − and + next to Size in the menu to make everything bigger or smaller. Keys: 1 to 9 select cards, Enter plays, Backspace discards, Esc clears your selection.</p></div>`,
 };
 function openModal(name, keep) {
@@ -356,8 +492,10 @@ function closeModal() { UI.modal = null; const m = $('#modal'); m.classList.remo
 /* ---------- tooltips ---------- */
 const TOUCH = window.matchMedia && window.matchMedia('(hover: none)').matches;
 function showTip(el) {
-  const html = UI.tips[el.dataset.tip];
+  let html = UI.tips[el.dataset.tip];
   if (!html) return;
+  html += liveTip(el);
+  UI.tipEl = el;
   if (TOUCH && el.closest('#hand') && !el.dataset.rich) return hideTip();
   if (press && (press.swept || press.lifted)) return;
   const t = $('#tip'); t.innerHTML = html; t.classList.add('show');

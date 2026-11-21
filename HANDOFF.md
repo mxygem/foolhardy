@@ -14,6 +14,10 @@ Everything in the original plan is built and passing. It is published with GitHu
 - [x] `test/check.js` — all checks pass: 300 jokers; unique names, emoji, flavor and normalized descriptions; each joker alone for several rounds; 7,600 chaos rounds with random joker mixes
 - [x] Browser check at 1440×900: blind select, play and scoring replay, cash-out, shop, collection, deck, hand levels, consumable use, discard, face-down boss cards, game over. No console errors.
 
+## Previews
+
+`FH.simulate(g, cardUids, luck, withoutJokerUid)` in `core.js` scores a hand on a deep copy made by `FH.cloneGame` (definitions registered in `FH.KEEP` are shared, not copied). `luck` is what every random roll returns: `0` makes every chance succeed, `0.999999` makes every one fail, and the UI runs both to show ranges. `ui.js` (`forecast`, `fxParts`, `jokerBadge`, `liveTip`) credits each event to its source and also re-scores without each joker. Retriggers and Wingman emit `re` events purely for this credit; the replay skips them. `test/check.js` asserts previews never change the real game and that luck-free previews equal the real score.
+
 ## Next steps, in priority order
 
 1. **Play it by hand and tune balance.** This is the biggest unknown. The test bot (greedy, buys at random) won 0 of 300 honest runs and usually dies in antes 1–3; it is a weak player, so that is not proof the game is too hard, but nobody has played a full run yet. Levers: `ANTE_BASE` and `FH.BLINDS` in `core.js`, `FH.HANDS` values, joker `cost`, starting money in `newGame`. A smarter bot in `test/check.js` (chase flushes/straights, value jokers) would give a real signal.

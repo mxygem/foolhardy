@@ -83,7 +83,14 @@ p { margin: 0; }
 /* ----- joker and consumable cards ----- */
 .jk, .cn { width: var(--jw); border-radius: 0.625rem; background: var(--paper); color: var(--ink); border: 0.1875rem solid var(--muted); overflow: hidden; position: relative; cursor: pointer; user-select: none; transition: transform .12s; }
 .jk:hover, .cn:hover { transform: translateY(-0.1875rem); }
-.jk-art, .cn-art { aspect-ratio: 1; display: block; } .jk-art svg, .cn-art svg { display: block; width: 100%; height: 100%; }
+.jk-art, .cn-art { aspect-ratio: 1; display: block; position: relative; }
+/* What a joker adds to the hand you have selected */
+.jfc { position: absolute; left: 0.25rem; right: 0.25rem; bottom: 0.25rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.15rem; pointer-events: none; }
+.jfc b { background: var(--deep); border-radius: 0.375rem; padding: 0.05rem 0.35rem; font-size: 0.95rem; line-height: 1.35; font-weight: 800; white-space: nowrap; box-shadow: 0 0.0625rem 0 rgba(0, 0, 0, .5); }
+.jfc .t-x { background: var(--mult); color: #fff; } .jfc .t-p { color: var(--pts); } .jfc .t-m { color: var(--mult); } .jfc .t-g { color: var(--gold); }
+.t-re { color: #c7a6ff; } .t-sc { color: var(--mint); }
+.tp-live { border-top: 1px solid rgba(242, 193, 78, .35); padding-top: 0.4rem; }
+.tp-live .t-x { padding: 0 0.25rem; } .tp-live b { white-space: nowrap; } .jk-art svg, .cn-art svg { display: block; width: 100%; height: 100%; }
 .jk-name, .cn-name { font-size: 0.8438rem; font-weight: 700; line-height: 1.1; text-align: center; padding: 0.25rem 0.1875rem 0.3125rem; min-height: 2.375rem; display: flex; align-items: center; justify-content: center; }
 .jk.r1 { border-color: #cfc3dd; } .jk.r2 { border-color: var(--mint); } .jk.r3 { border-color: var(--mult); } .jk.r4 { border-color: var(--gold); box-shadow: 0 0 0 0.125rem #7a5a00, 0 0 1.125rem rgba(242, 193, 78, .55); }
 .jk.off { filter: grayscale(1) brightness(.55); }
@@ -183,6 +190,8 @@ p { margin: 0; }
 .hpv .muted { overflow: hidden; text-overflow: ellipsis; }
 .hpv-name { font-size: 1.25rem; } .hpv small { color: var(--muted); font-size: 0.95rem; }
 .hpv-pm { font-weight: 800; font-size: 1.2rem; font-variant-numeric: tabular-nums; } .hpv-n { color: var(--muted); }
+.hpv-sc { color: var(--muted); } .hpv-sc b { color: var(--text); font-size: 1.2rem; font-variant-numeric: tabular-nums; } .hpv-sc.win b { color: var(--mint); }
+.hpv-err { color: var(--mult); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .controls { display: flex; align-items: center; gap: 0.875rem; flex-wrap: wrap; justify-content: center; }
 .sorts { color: var(--muted); }
 .link { background: none; border: none; padding: 0 0.125rem; text-decoration: underline; color: var(--text); } .link.on { color: var(--gold); font-weight: 700; }
@@ -253,6 +262,8 @@ p { margin: 0; }
   .eb { font-size: 0.625rem; padding: 0 0.3125rem; } .st { width: 0.8125rem; height: 0.8125rem; right: 0.25rem; top: 0.375rem; }
   .hand { padding-top: 1.5rem; }
   .hand .hc:hover .pc { transform: none; } .hand .hc .pc.sel { transform: translateY(-1.25rem); } .hand .hc.lifted .pc { transform: translateY(-0.75rem) scale(1.06); }
+  .jfc b { font-size: 0.72rem; padding: 0 0.2rem; } .jfc { left: 0.1rem; right: 0.1rem; bottom: 0.1rem; gap: 0.1rem; }
+  .hpv-sc b { font-size: 1rem; } .hpv-n { display: none; }
   .hpv { font-size: 0.9rem; gap: 0.45rem; min-height: 1.5rem; } .hpv-name { font-size: 1.05rem; } .hpv-pm { font-size: 1rem; } .hpv small { font-size: 0.8rem; }
   .controls { gap: 0.5rem; } .btn.big { font-size: 1.0625rem; padding: 0.625rem 0.8125rem; white-space: nowrap; }
   .sorts { font-size: 0.875rem; white-space: nowrap; } .deckpile { padding: 0.375rem 0.5625rem; } .deckpile span { display: none; } .deckpile b { font-size: 1.125rem; }

@@ -70,13 +70,15 @@ FH.cloneCard = k => Object.assign({}, k, { uid: FH.uid(), debuffed: false, faceD
 FH.randomCard = (g, extra) => FH.makeCard(2 + Math.floor(g.rng() * 13), FH.pick(g, FH.SUITS), extra);
 
 /* ---------- registries ---------- */
+/* Definitions are shared and never copied when the game state is cloned for a preview. */
+FH.KEEP = new WeakSet();
 FH.JOKERS = {}; FH.JLIST = [];
 const COST = [0, 4, 6, 8, 20];
 FH.J = (name, rarity, emoji, desc, flavor, def) => {
   const id = FH.slug(name);
   if (FH.JOKERS[id]) throw new Error('Duplicate joker: ' + id);
   const d = Object.assign({ id, name, rarity, emoji, desc, flavor, cost: COST[rarity] + (rarity === 4 ? 0 : FH.hash(id) % 3) }, def);
-  FH.JOKERS[id] = d; FH.JLIST.push(d);
+  FH.JOKERS[id] = d; FH.JLIST.push(d); FH.KEEP.add(d);
   return d;
 };
 FH.CONS = {}; FH.CLIST = [];
@@ -84,13 +86,13 @@ FH.C = (kind, name, emoji, desc, flavor, def) => {
   const id = FH.slug(name);
   if (FH.CONS[id]) throw new Error('Duplicate consumable: ' + id);
   const d = Object.assign({ id, kind, name, emoji, desc, flavor, cost: kind === 'rite' ? 4 : 3 }, def);
-  FH.CONS[id] = d; FH.CLIST.push(d);
+  FH.CONS[id] = d; FH.CLIST.push(d); FH.KEEP.add(d);
   return d;
 };
 FH.BOSSES = {}; FH.BOSSLIST = [];
 FH.B = (name, emoji, desc, def) => {
   const d = Object.assign({ id: FH.slug(name), name, emoji, desc }, def);
-  FH.BOSSES[d.id] = d; FH.BOSSLIST.push(d);
+  FH.BOSSES[d.id] = d; FH.BOSSLIST.push(d); FH.KEEP.add(d);
   return d;
 };
 
@@ -144,7 +146,11 @@ FH.sum = (g, hook, c, ...a) => {
   for (const s of [...g.jokers]) {
     if (s.disabled) continue;
     const t = FH.resolve(g, s);
-    if (t && t.def[hook]) n += Number(t.def[hook](c, t, ...a)) || 0;
+    if (!t || !t.def[hook]) continue;
+    const v = Number(t.def[hook](c, t, ...a)) || 0;
+    n += v;
+    /* Record who caused each retrigger, so a preview can credit the joker. The replay ignores these. */
+    if (v > 0 && hook.startsWith('retrigger')) c.ev.push({ src: s.uid, srcKind: 'joker', kind: 're', val: v });
   }
   return n;
 };
@@ -247,7 +253,7 @@ class Ctx {
   pts(n) { if (!n) return; this.p += n; this._e('pts', n); }
   mult(n) { if (!n) return; this.m += n; this._e('mult', n); }
   x(n) { if (n == null || n === 1) return; this.m *= n; this.xcount++; this._e('x', n); }
-  setPM(p, m, label) { this.p = p; this.m = m; this._e('msg', label); }
+  setPM(p, m, label) { const from = [this.p, this.m]; this.p = p; this.m = m; this._e('msg', label); this.ev[this.ev.length - 1].set = { from, to: [p, m] }; }
   money(n) {
     if (!n) return;
     FH.addMoney(this.g, n);
@@ -460,7 +466,9 @@ FH.play = (g, cards) => {
     const t = FH.resolve(g, s);
     if (t && t.def.main) {
       const i = g.jokers.indexOf(s);
-      const wings = [g.jokers[i - 1], g.jokers[i + 1]].filter(w => w && !w.disabled && w.def.wing).length;
+      const wingmen = [g.jokers[i - 1], g.jokers[i + 1]].filter(w => w && !w.disabled && w.def.wing);
+      const wings = wingmen.length;
+      wingmen.forEach(w => c.ev.push({ src: w.uid, srcKind: 'joker', kind: 're', val: 1, joker: true }));
       for (let r = 0; r <= wings; r++) { c.cur = s; c.curKind = 'joker'; t.def.main(c, t); }
     }
     c.cur = s; c.curKind = 'joker';
@@ -491,6 +499,31 @@ FH.play = (g, cards) => {
   else g.pending = 'draw';
   if (c.ev.length && c.ev[c.ev.length - 1].kind !== 'total') c.ev.push({ kind: 'sync', money: g.money });
   return { ev: c.ev, total: c.total, type: ev.type, played: cards, outcome: g.pending };
+};
+/* ---------- previews ---------- */
+/* Deep-copy the game so a hand can be scored without touching the real run. Definitions are shared, functions are kept as they are. */
+FH.cloneGame = g => {
+  const seen = new Map();
+  const cp = v => {
+    if (v === null || typeof v !== 'object' || FH.KEEP.has(v)) return v;
+    if (seen.has(v)) return seen.get(v);
+    if (v instanceof Set) { const o = new Set(); seen.set(v, o); v.forEach(x => o.add(cp(x))); return o; }
+    if (v instanceof Map) { const o = new Map(); seen.set(v, o); v.forEach((x, k) => o.set(k, cp(x))); return o; }
+    const o = Array.isArray(v) ? [] : Object.create(Object.getPrototypeOf(v));
+    seen.set(v, o);
+    for (const k of Object.keys(v)) o[k] = cp(v[k]);
+    return o;
+  };
+  return cp(g);
+};
+/* Score the given hand cards on a copy of the game. luck is what every random roll returns:
+   0 makes every listed chance succeed, just under 1 makes every one fail. without removes a joker first. */
+FH.simulate = (g, uids, luck, without) => {
+  const sim = FH.cloneGame(g);
+  sim.rng = () => luck;
+  if (without != null) sim.jokers = sim.jokers.filter(s => s.uid !== without);
+  const want = new Set(uids);
+  return FH.play(sim, sim.hand.filter(k => want.has(k.uid)));
 };
 FH.resolvePlay = g => {
   const p = g.pending; g.pending = null;
